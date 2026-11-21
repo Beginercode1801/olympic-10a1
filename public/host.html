@@ -1,0 +1,52 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MC</title>
+<script src="/common.js"></script>
+<style>
+.wrap{max-width:900px;margin:auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+.box{background:#12204a;border-radius:12px;padding:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+textarea{width:100%;min-height:80px}
+.g{background:#1f9d55}.r{background:#d64545}.y{background:#c28a00}.gray{background:#4a5678}
+table{width:100%;border-collapse:collapse}td,th{padding:6px;text-align:left;border-bottom:1px solid #2a3a6a}
+.timer{font-size:36px;font-weight:800;color:#ffd24a}
+</style></head><body><div class="wrap">
+<div class="box">
+  <div class="row"><b>Câu hỏi</b>
+    <select id="round"><option>Khởi động</option><option>Vượt chướng ngại vật</option><option>Tăng tốc</option><option>Về đích</option></select>
+    <select id="mode"><option value="buzz">Bấm chuông</option><option value="answer">Nhập đáp án</option></select>
+    Giờ (s) <input id="sec" type="number" value="15" style="width:70px">
+    Điểm đúng <input id="pts" type="number" value="10" style="width:70px">
+    <span class="timer" id="timer"></span>
+  </div>
+  <textarea id="text" placeholder="Nội dung câu hỏi..."></textarea>
+  <div class="row" style="margin-top:8px">
+    <button onclick="sendQ()">1. Hiện câu hỏi</button>
+    <button class="g" onclick="api.send({type:'start'})">2. Bắt đầu tính giờ</button>
+    <button class="y" onclick="api.send({type:'end'})">Dừng</button>
+    <button class="gray" onclick="api.send({type:'reopen'})">Mở lại chuông</button>
+    <button onclick="api.send({type:'reveal'})">Hiện đáp án thí sinh</button>
+    <button class="gray" onclick="api.send({type:'hide'})">Ẩn câu hỏi</button>
+  </div>
+</div>
+<div class="box"><b>Thứ tự bấm chuông</b><div id="buzz"></div></div>
+<div class="box"><b>Đáp án đã nhập</b><div id="answers"></div></div>
+<div class="box"><b>Điểm</b><div id="scores"></div>
+  <div style="margin-top:8px"><button class="r" onclick="if(confirm('Reset toàn bộ điểm?'))api.send({type:'resetScores'})">Reset điểm</button></div></div>
+</div>
+<script>
+const style=document.createElement('style');style.textContent=BASE_CSS;document.head.appendChild(style);
+let pass=localStorage.getItem('olympia-pass')||prompt('Mật khẩu MC:');
+localStorage.setItem('olympia-pass',pass||'');
+const api=connect({role:'host',pass},render);
+const $=id=>document.getElementById(id);
+const nm=(s,slot)=>esc(s.players[slot-1].name||('Thí sinh '+slot));
+function sendQ(){api.send({type:'question',round:$('round').value,mode:$('mode').value,text:$('text').value,seconds:+$('sec').value})}
+function judge(slot,correct){api.send({type:'judge',slot,correct,points:+$('pts').value})}
+function render(s){
+  $('buzz').innerHTML=s.buzz.length?`<table>${s.buzz.map((b,i)=>`<tr><td>#${i+1}</td><td>${nm(s,b.slot)}</td><td>${fmt(b.t)}</td><td><button class="g" onclick="judge(${b.slot},true)">Đúng</button> <button class="r" onclick="judge(${b.slot},false)">Sai</button></td></tr>`).join('')}</table>`:'<span class="muted">Chưa ai bấm</span>';
+  const ans=Object.entries(s.answers).map(([sl,a])=>({sl:+sl,...a})).sort((a,b)=>a.t-b.t);
+  $('answers').innerHTML=ans.length?`<table>${ans.map((a,i)=>`<tr><td>#${i+1}</td><td>${nm(s,a.sl)}</td><td><b>${esc(a.text)}</b></td><td>${fmt(a.t)}</td><td>${a.correct===true?'✔':a.correct===false?'✘':''} <button class="g" onclick="judge(${a.sl},true)">Đúng</button> <button class="r" onclick="judge(${a.sl},false)">Sai</button></td></tr>`).join('')}</table>`:'<span class="muted">Chưa có đáp án</span>';
+  $('scores').innerHTML=`<table>${s.players.map((p,i)=>`<tr><td>${i+1}</td><td><input value="${esc(p.name)}" placeholder="Thí sinh ${i+1}" onchange="api.send({type:'rename',slot:${i+1},name:this.value})"> ${p.online?'🟢':'⚪'}</td><td><b>${p.score}</b></td><td><button class="gray" onclick="api.send({type:'score',slot:${i+1},delta:-10})">-10</button> <button class="gray" onclick="api.send({type:'score',slot:${i+1},delta:10})">+10</button></td></tr>`).join('')}</table>`;
+}
+setInterval(()=>{const s=api.state;if(!s)return;const r=remaining(s,api);$('timer').textContent=r==null?'':Math.ceil(r)},100);
+</script></body></html>

@@ -1,0 +1,74 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thí sinh</title>
+<script src="/common.js"></script>
+<style>
+.wrap{min-height:100vh;display:flex;flex-direction:column;padding:18px;gap:14px;max-width:700px;margin:auto}
+.top{display:flex;justify-content:space-between;align-items:center}
+.round{color:#ffd24a;text-transform:uppercase;letter-spacing:1px}
+.timer{font-size:56px;font-weight:800;color:#ffd24a;text-align:center}
+.q{font-size:clamp(22px,5vw,36px);font-weight:700;text-align:center;flex:1;display:flex;align-items:center;justify-content:center}
+#buzz{font-size:36px;padding:34px;border-radius:18px;background:#e63946;width:100%}
+#buzz:active{transform:scale(.97)}
+.row{display:flex;gap:8px}.row input{flex:1;font-size:22px}
+.status{text-align:center;font-size:20px;min-height:28px}
+#join{display:flex;flex-direction:column;gap:10px;margin-top:80px}
+</style></head><body><div class="wrap">
+<div id="join" style="display:none">
+  <h2>Tham gia với tên của bạn</h2>
+  <input id="name" placeholder="Họ và tên"><button onclick="join()">Vào phòng</button>
+</div>
+<div id="game" style="display:none;flex:1;flex-direction:column;gap:14px">
+  <div class="top"><div id="who"></div><div id="score"></div></div>
+  <div class="round" id="round"></div>
+  <div class="timer" id="timer"></div>
+  <div class="q" id="q"></div>
+  <div id="ctl"></div>
+  <div class="status" id="status"></div>
+</div></div>
+<script>
+const style=document.createElement('style');style.textContent=BASE_CSS;document.head.appendChild(style);
+const slot=+(new URLSearchParams(location.search).get('slot')||1);
+const key='olympia-name-'+slot;
+let api=null, lastKey='';
+function join(){
+  const name=document.getElementById('name').value.trim(); if(!name)return;
+  localStorage.setItem(key,name); start(name);
+}
+function start(name){
+  document.getElementById('join').style.display='none';
+  const g=document.getElementById('game');g.style.display='flex';
+  api=connect({role:'player',slot,name},render);
+}
+const saved=localStorage.getItem(key);
+if(saved)start(saved);else document.getElementById('join').style.display='flex';
+
+function render(s){
+  const me=s.players[slot-1];
+  document.getElementById('who').textContent=me.name||('Thí sinh '+slot);
+  document.getElementById('score').textContent=me.score+' điểm';
+  document.getElementById('round').textContent=s.round;
+  document.getElementById('q').textContent=s.visible?s.text:'';
+  const running=s.phase==='running', out=s.out.includes(slot);
+  const myBuzz=s.buzz.findIndex(b=>b.slot===slot), myAns=s.answers[slot];
+  const k=[s.mode,s.visible,s.phase,out,myBuzz,!!myAns].join('|')+s.text;
+  const ctl=document.getElementById('ctl');
+  if(k!==lastKey){
+    lastKey=k;
+    if(!s.visible) ctl.innerHTML='';
+    else if(s.mode==='buzz') ctl.innerHTML=`<button id="buzz" ${(!running||out||myBuzz>=0)?'disabled':''} onclick="api.send({type:'buzz'})">BẤM CHUÔNG</button>`;
+    else ctl.innerHTML=`<div class="row"><input id="ans" placeholder="Nhập đáp án" autocomplete="off" ${(!running||myAns)?'disabled':''} onkeydown="if(event.key==='Enter')sendAns()"><button ${(!running||myAns)?'disabled':''} onclick="sendAns()">Gửi</button></div>`;
+    const a=document.getElementById('ans');if(a&&running&&!myAns)a.focus();
+  }
+  let st='';
+  if(s.visible){
+    if(out)st='Bạn đã mất quyền trả lời câu này';
+    else if(s.mode==='buzz'&&myBuzz>=0)st=myBuzz===0?`Bạn bấm đầu tiên! (${fmt(s.buzz[0].t)})`:`Bạn bấm thứ ${myBuzz+1} (${fmt(s.buzz[myBuzz].t)})`;
+    else if(s.mode==='answer'&&myAns)st=`Đã gửi: ${myAns.text} (${fmt(myAns.t)})`;
+    else if(s.phase==='ready')st='Chuẩn bị...';
+    else if(s.phase==='ended')st='Hết giờ';
+  }
+  document.getElementById('status').textContent=st;
+}
+function sendAns(){const a=document.getElementById('ans');if(!a||!a.value.trim())return;api.send({type:'answer',text:a.value.trim()})}
+setInterval(()=>{if(!api||!api.state)return;const s=api.state;const r=remaining(s,api);document.getElementById('timer').textContent=r==null||!s.visible?'':Math.ceil(r)},100);
+</script></body></html>
